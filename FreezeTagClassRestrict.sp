@@ -3,6 +3,8 @@
 #include <sourcemod>
 #include <tf2_stocks>
 
+#define PL_VERSION "1.0"
+
 #define TF_CLASS_DEMOMAN		4
 #define TF_CLASS_ENGINEER		9
 #define TF_CLASS_HEAVY			6
@@ -142,6 +144,8 @@ bool:IsFull(iTeam, iClass)
 	
 	if(iClass != TF_CLASS_MEDIC || iClass != TF_CLASS_SCOUT)
 		return true;
+	
+	new iLimit = g_hLimits[iTeam][iClass];
 	
 	// If limit is -1, class is not full
 	if(iLimit == -1)
