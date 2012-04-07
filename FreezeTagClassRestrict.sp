@@ -167,6 +167,21 @@ bool:IsFull(iTeam, iClass)
 
 PickClass(iClient)
 {
-	TF2_SetPlayerClass(iClient, TFClassType:1);
-	TF2_RespawnPlayer(iClient);
+	// Loop through all classes, starting at random class
+	for(new i = GetRandomInt(TF_CLASS_SCOUT, TF_CLASS_ENGINEER), iClass = i, iTeam = GetClientTeam(iClient);;)
+	{
+		// If team's class is not full, set client's class
+		if(!IsFull(iTeam, i))
+		{
+			TF2_SetPlayerClass(iClient, TFClassType:i);
+			TF2_RespawnPlayer(iClient);
+			g_iClass[iClient] = i;
+			break;
+		}
+		// If next class index is invalid, start at first class
+		else if(++i > TF_CLASS_ENGINEER)
+			i = TF_CLASS_SCOUT;
+		// If loop has finished, stop searching
+		else if(i == iClass)
+			break;
 }
