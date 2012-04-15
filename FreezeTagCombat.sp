@@ -68,10 +68,22 @@ public OnPluginStart()
 	HookEvent("player_changeclass", Event_PlayerClass);
 	HookEvent("player_spawn",       Event_PlayerSpawn);
 	HookEvent("post_inventory_application", Event_BlockWeaponRespawn);
-	HookEvent("player_hurt", Event_PlayerHurt);
+	HookEvent("player_hurt", Event_PlayerHurt, EventHookMode_Pre);
 	HookEvent("player_healed", Event_MedicUnfreeze);
+	HookEvent("teamplay_capture_blocked", Event_AllowFrozenPointCapture, EventHookMode_Pre);
 }
 
+public Action:Event_AllowFrozenPointCapture(Handle:event, const String:name[], bool:dontBroadcast)
+{
+	new blockerId = GetEventInt(event, "blocker");
+	new blocker = GetClientOfUserId(blockerId);
+	
+	if(g_bFrozen[blocker])
+		return Plugin_Handled;
+	else
+		return Plugin_Continue;
+	
+}
 public Event_MedicUnfreeze(Handle:event, const String:name[], bool:dontBroadcast)
 {
 	PrintToServer("Medic Unfreeze");
@@ -91,7 +103,7 @@ public MedicUnfreezePlayer(client, timer)
 	}
 }
 
-public Event_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast)
+public Action:Event_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast)
 {
 	PrintToServer("Player hurt");
 
@@ -101,8 +113,14 @@ public Event_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast)
 	new attacker = GetClientOfUserId(attackerId);
 	if(g_bFrozen[attacker])
 	{		
-		SetEntProp(victim, Prop_Data, "m_iHealth", 125);
-		return Plugin_Continue;
+		//if(TF2_GetPlayerClass(victim) == TF_CLASS_SCOUT)
+		//	SetEntProp(victim, Prop_Data, "m_iHealth", 125);
+		//else
+		//{
+		//	new victimHp = GetClientHealth(victim);
+		//	SetEntProp(victim, Prop_Data, "m_iHealth", victimHp);
+		//}
+		return Plugin_Handled;
 	}
 	if(TF2_GetPlayerClass(victim) == TF_CLASS_SCOUT && (TF2_GetPlayerClass(attacker) == TF_CLASS_MEDIC || TF2_GetPlayerClass(attacker) == TF_CLASS_SCOUT))
 		FreezePlayer(victim);
@@ -114,7 +132,7 @@ public FreezePlayer(client)
 {
 	if(g_hUnfreezeTimer[client] == INVALID_HANDLE)
 	{
-		SetEntProp(client, Prop_Data, "m_iHealth", 125);
+		SetEntProp(client, Prop_Data, "m_iHealth", 65);
 		TF2_AddCondition(client, TFCond_Ubercharged, 15.0);
 		SetEntityMoveType(client, MOVETYPE_NONE);
 	
