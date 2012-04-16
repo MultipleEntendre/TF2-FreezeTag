@@ -9,6 +9,8 @@
 
 #define PL_VERSION "1.0"
 
+#define SOUND_FREEZE	"physics/glass/glass_impact_bullet4.wav"
+
 #define TF_CLASS_DEMOMAN		4
 #define TF_CLASS_ENGINEER		9
 #define TF_CLASS_HEAVY			6
@@ -22,6 +24,14 @@
 
 #define TF_TEAM_BLU					3
 #define TF_TEAM_RED					2
+
+//Color codes. (Light blue would be lovely for the [FT] prefix, but alas, we lack proper coloring)
+#define cDefault				0x01
+#define cLightGreen 			0x03
+#define cGreen					0x04
+#define cDarkGreen  			0x05
+
+
 
 new g_iClass[MAXPLAYERS + 1];
 //Keeps track of frozen status of all players
@@ -60,6 +70,36 @@ public Plugin:myinfo =
 	url = "<- URL ->"
 }
 
+/*	If we're running freeze tag, tell them */
+public OnClientPutInServer(client)
+{
+	DisplayRules(client);
+}
+
+DisplayRules(client)
+{	
+	decl String:message[128];
+	Format(message, sizeof(message), "%c[FT]%c * Attack enemies to freeze them, medics can heal to unfreeze.", cGreen, cDefault);
+	
+	if (client == -1)
+		PrintToChatAll(message);
+	else
+		PrintToChat(client, message);
+
+	Format(message, sizeof(message), "%c[FT]%c * Each team gets one medic for every four scouts. Medics can't be frozen, but they CAN be killed!", cGreen, cDefault);
+	if (client == -1)
+		PrintToChatAll(message);
+	else
+		PrintToChat(client, message);
+		
+	Format(message, sizeof(message), "%c[FT]%c * First team to freeze all the opponent's scouts receives a mini humiliation round for 10 seconds!", cGreen, cDefault);
+	if (client == -1)
+		PrintToChatAll(message);
+	else
+		PrintToChat(client, message);
+
+}
+
 public OnPluginStart()
 {
 	CreateConVar("sm_freezetag_combat", PL_VERSION, "Enforce Freezetag Combat rules.", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
@@ -68,22 +108,11 @@ public OnPluginStart()
 	HookEvent("player_changeclass", Event_PlayerClass);
 	HookEvent("player_spawn",       Event_PlayerSpawn);
 	HookEvent("post_inventory_application", Event_BlockWeaponRespawn);
-	HookEvent("player_hurt", Event_PlayerHurt, EventHookMode_Pre);
+	HookEvent("player_hurt", Event_PlayerHurt);
 	HookEvent("player_healed", Event_MedicUnfreeze);
-	HookEvent("teamplay_capture_blocked", Event_AllowFrozenPointCapture, EventHookMode_Pre);
+
 }
 
-public Action:Event_AllowFrozenPointCapture(Handle:event, const String:name[], bool:dontBroadcast)
-{
-	new blockerId = GetEventInt(event, "blocker");
-	new blocker = GetClientOfUserId(blockerId);
-	
-	if(g_bFrozen[blocker])
-		return Plugin_Handled;
-	else
-		return Plugin_Continue;
-	
-}
 public Event_MedicUnfreeze(Handle:event, const String:name[], bool:dontBroadcast)
 {
 	PrintToServer("Medic Unfreeze");
@@ -103,9 +132,9 @@ public MedicUnfreezePlayer(client, timer)
 	}
 }
 
-public Action:Event_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast)
+public Event_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast)
 {
-	PrintToServer("Player hurt");
+	//PrintToServer("Player hurt");
 
 	new victimId = GetEventInt(event, "userid");
 	new attackerId = GetEventInt(event, "attacker");
@@ -113,14 +142,14 @@ public Action:Event_PlayerHurt(Handle:event, const String:name[], bool:dontBroad
 	new attacker = GetClientOfUserId(attackerId);
 	if(g_bFrozen[attacker])
 	{		
-		//if(TF2_GetPlayerClass(victim) == TF_CLASS_SCOUT)
-		//	SetEntProp(victim, Prop_Data, "m_iHealth", 125);
-		//else
-		//{
-		//	new victimHp = GetClientHealth(victim);
-		//	SetEntProp(victim, Prop_Data, "m_iHealth", victimHp);
-		//}
-		return Plugin_Handled;
+		if(TF2_GetPlayerClass(victim) == TF_CLASS_SCOUT)
+			SetEntProp(victim, Prop_Data, "m_iHealth", 125);
+		else
+		{
+			new victimHp = GetClientHealth(victim);
+			SetEntProp(victim, Prop_Data, "m_iHealth", victimHp);
+		}
+		return Plugin_Continue;
 	}
 	if(TF2_GetPlayerClass(victim) == TF_CLASS_SCOUT && (TF2_GetPlayerClass(attacker) == TF_CLASS_MEDIC || TF2_GetPlayerClass(attacker) == TF_CLASS_SCOUT))
 		FreezePlayer(victim);
@@ -139,6 +168,8 @@ public FreezePlayer(client)
 		g_bFrozen[client] = true;
 		g_hUnfreezeTimer[client] = CreateTimer(15.0, AutoUnfreezePlayer, client);
 	}
+	
+	FT_CheckForWinner();
 }
 
 public Action:AutoUnfreezePlayer(Handle:timer, any:client)
@@ -265,4 +296,146 @@ stock MedicWeapons(client)
 	}
 }
 
+FT_CheckForWinner() 
+{
+	if (g_bIsHumiliationRound) //can't win while already in humiliation, silly
+		return;
 
+	new bool:redStillActive = false;
+	new bool:bluStillActive = false;
+	
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		if (IsClientOnValidTeam(i) && !g_bFrozen[i] && TF2_GetPlayerClass(i) != TF_CLASS_MEDIC)
+		{
+
+			
+			if (GetClientTeam(i) == TF_TEAM_BLU)
+			{
+					bluStillActive = true;
+					PrintToServer("BLUE ACTIVE");
+			}
+			
+			if (GetClientTeam(i) == TF_TEAM_RED)
+			{
+					redStillActive = true;
+					PrintToServer("RED ACTIVE");
+			}
+			
+			//avoid unnecessary tests
+			if (redStillActive && bluStillActive)
+				break;
+		}
+	}
+	
+	if (!redStillActive)
+	{
+		PrintToServer("blue team won");
+		FT_StartHumiliationRound(TF_TEAM_BLU);
+	}
+	if (!bluStillActive)
+	{
+		PrintToServer("red team won");
+		FT_StartHumiliationRound(TF_TEAM_RED);
+	}
+}
+
+/*	Timer callback to end the humiliation round */
+public Action:FT_TimerEndHumiliation(Handle:timer, any:client)
+{
+	if (g_bIsHumiliationRound)
+	{
+		decl String:message[128];
+		Format(message, sizeof(message), "%c[FT]%c Mini humiliation round has ended!", cGreen, cDefault);
+		PrintToChatAll(message);
+		
+			
+		FT_EndHumiliationRound();
+	}
+}
+
+/*	Unfreezes all players of the winning team, kills auto unfreeze timers of all the losers (so they can't unfreeze during humiliation)
+	and adds a timer to stop the humiliation round 
+*/
+FT_StartHumiliationRound(winningTeam)
+{
+	g_bIsHumiliationRound = true;
+
+	
+	decl String:message[128];
+	Format(message, sizeof(message), "%c[FT]%c %s Team wins this round of freeze tag!", cGreen, cDefault, (winningTeam == TF_TEAM_RED) ? "RED" : "BLU");
+	PrintToChatAll(message);
+
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		//Unfreeze members of the winning team to allow some griefing
+		if (g_bFrozen[i] && IsClientOnValidTeam(i))
+		{
+			if (GetClientTeam(i) == winningTeam)
+			{
+				PrintToServer("Player %d is unfrozen", i);
+				UnfreezePlayer(i);
+			}
+			else if (g_hUnfreezeTimer[i] != INVALID_HANDLE) 
+			{
+				//Don't let them auto unfreeze during humiliation round
+				CloseHandle(g_hUnfreezeTimer[i]);
+				g_hUnfreezeTimer[i] = INVALID_HANDLE;
+			}
+		}
+		else if(!g_bFrozen[i] && IsClientOnValidTeam(i))
+		{
+			if(GetClientTeam(i) != winningTeam)
+			{
+				FreezePlayer(i);
+				//Don't let them auto unfreeze during humiliation round
+				CloseHandle(g_hUnfreezeTimer[i]);
+				g_hUnfreezeTimer[i] = INVALID_HANDLE;
+			}
+		}
+	}
+	
+	//If this round is 0 seconds (disabled), hop right to finishing it. Otherwise, wait.
+	new Float:duration = 10.0;
+
+	PrintToChatAll("%c[FT]%c %s Team is stuck for %.1f seconds before being respawned!", 
+					cGreen, cDefault, (winningTeam == TF_TEAM_BLU) ? "RED" : "BLU", duration);
+					
+	CreateTimer(duration, FT_TimerEndHumiliation, winningTeam);
+}
+
+/*	Unfreeze and respawn losers. If we are to keep playing freeze tag, start a new round. Otherwise end it */
+FT_EndHumiliationRound()
+{
+	PrintToChatAll("%c[FT]%c Losers have been thawed and respawned!", cGreen, cDefault);
+	
+	
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		if (g_bFrozen[i])
+		{
+			UnfreezePlayer(i);
+			TF2_RespawnPlayer(i);
+		}
+	}
+	
+	g_bIsHumiliationRound = false;
+}
+
+/*	Returns true if the client is actively playing on RED or BLU */
+stock bool:IsClientOnValidTeam(client)
+{
+	//TODO: Might have too many checks here. What is (not) necessary?
+	if (!IsClientConnected(client) || !IsClientInGame(client) || !IsPlayerAlive(client))
+		return false;
+
+	new team = GetClientTeam(client);
+	return (team == TF_TEAM_BLU || team == TF_TEAM_RED);
+}
+
+/*	Clear frozen status on a player and checks for a team win in case the  disconnected player was the last one unfrozen. */
+public OnClientDisconnect(client)
+{		
+	UnfreezePlayer(client);
+	FT_CheckForWinner();
+}
