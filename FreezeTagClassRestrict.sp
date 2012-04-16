@@ -20,6 +20,12 @@
 #define TF_TEAM_BLU					3
 #define TF_TEAM_RED					2
 
+//Color codes. (Light blue would be lovely for the [FT] prefix, but alas, we lack proper coloring)
+#define cDefault				0x01
+#define cLightGreen 			0x03
+#define cGreen					0x04
+#define cDarkGreen  			0x05
+
 public Plugin:myinfo = 
 {
 	name = "Fight Club Freeze Tag Class Restrictions",
@@ -128,6 +134,22 @@ bool:IsFull(iTeam, iClass)
 	PrintToServer("%d", iClass);
 	new iBluMedics = GetTeamClientCount(TF_TEAM_BLU) / 3;
 	new iRedMedics = GetTeamClientCount(TF_TEAM_RED) / 3;
+	
+	if((iBluMedics > g_hLimits[TF_TEAM_BLU][TF_CLASS_MEDIC]) ||
+	   (iRedMedics > g_hLimits[TF_TEAM_RED][TF_CLASS_MEDIC]) )
+	{
+		decl String:message[128];
+		Format(message, sizeof(message), "%c[FT]%c A Medic slot has opened for both teams!", cGreen, cDefault);
+		PrintToChatAll(message);
+	}
+	
+	if((iBluMedics < g_hLimits[TF_TEAM_BLU][TF_CLASS_MEDIC]) &&
+	   (iRedMedics < g_hLimits[TF_TEAM_RED][TF_CLASS_MEDIC]) )
+	{
+		decl String:message[128];
+		Format(message, sizeof(message), "%c[FT]%c A Medic slot has closed for both teams!", cGreen, cDefault);
+		PrintToChatAll(message);
+	}
 	
 	if(iBluMedics > iRedMedics)
 	{
