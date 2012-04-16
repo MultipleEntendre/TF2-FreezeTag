@@ -58,8 +58,8 @@ public OnPluginStart()
 
 	CreateConVar("sm_juggernaut", PL_VERSION, "Juggernaut Mode", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
 	
-	HookEvent("player_team",        Event_PlayerTeam);
-	HookEvent("player_changeclass", Event_PlayerClass);
+	//HookEvent("player_team",        Event_PlayerTeam);
+	//HookEvent("player_changeclass", Event_PlayerClass);
 	HookEvent("player_spawn",       Event_PlayerSpawn);
 	HookEvent("player_death",       Event_PlayerDeath);
 }
@@ -149,12 +149,14 @@ public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast)
 			ChangeClientTeam(iClient, TF_TEAM_RED);
 		TF2_SetPlayerClass(iClient, TFClass_Soldier);
 		TF2_AddCondition(iClient, TFCond_Buffed, 60.0);
+		TF2_RegeneratePlayer(iClient);
 	}
 	else
 	{
 		if(iTeam != TF_TEAM_BLU)
 			ChangeClientTeam(iClient, TF_TEAM_BLU);
 		TF2_SetPlayerClass(iClient, TFClass_Scout);
+		TF2_RegeneratePlayer(iClient);
 	}
 }
 
