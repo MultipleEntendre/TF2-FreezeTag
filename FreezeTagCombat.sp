@@ -409,7 +409,6 @@ FT_EndHumiliationRound()
 {
 	PrintToChatAll("%c[FT]%c Losers have been thawed and respawned!", cGreen, cDefault);
 	
-	
 	for (new i = 1; i <= MaxClients; i++)
 	{
 		if (g_bFrozen[i])
