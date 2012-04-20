@@ -36,6 +36,11 @@ new TF2GameRulesEntity; //The entity that controls spawn wave times
 //Keeps track of who is the Juggernaut
 new bool:g_bJuggernaut[MAXPLAYERS+1] = { false, ... };
 
+new g_iJuggernautsKilled[MAXPLAYERS+1];
+new g_iJuggernautKills[MAXPLAYERS+1];
+
+new Handle:db = INVALID_HANDLE;
+
 new Float:g_fFreezeOrigin[MAXPLAYERS+1][3];
 new Float:g_fFreezeAngle[MAXPLAYERS+1][3];
 
@@ -94,6 +99,9 @@ public OnClientPutInServer(client)
 {
 	g_bJuggernaut[client] = false;
 	g_iClientCount++;
+	
+	g_iJuggernautKills[client] = 0;
+	g_iJuggernautsKilled[client] = 0;
 }
 
 public OnClientDisconnect(client)
@@ -120,7 +128,36 @@ public OnClientDisconnect(client)
 		g_bJuggernaut[client] = false;
 		g_bJuggernautExists = false;
 	}
+	decl String:error[512];
+	SQL_TConnect(GetDatabase);
 	
+	decl String:query[512];
+	Format(query, sizeof(query), " %d",)
+	SQL_TQuery(db, UpdateDatabase, query, client);
+	
+	g_iJuggernautKills[client] = 0;
+	g_iJuggernautsKilled[client] = 0;
+}
+
+public GetDatabase(Handle:owner, Handle:hndl, const String:error[], any:data)
+{
+	if (hndl == INVALID_HANDLE)
+	{
+		LogError("Database failure: %s", error);
+	} 
+	else 
+	{
+		db = hndl;
+	}
+}
+
+public UpdateDatabase(Handle:owner, Handle:hndl, const String:error[], any:data)
+{
+	if (hndl == INVALID_HANDLE)
+	{
+		LogError("Query failed! %s", error);
+	}
+
 }
 
 public Event_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast)
