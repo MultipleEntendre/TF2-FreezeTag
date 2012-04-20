@@ -39,6 +39,8 @@ new bool:g_bJuggernaut[MAXPLAYERS+1] = { false, ... };
 new g_iJuggernautsKilled[MAXPLAYERS+1];
 new g_iJuggernautKills[MAXPLAYERS+1];
 
+new String:g_sClientIDS[MAXPLAYERS+1] = {"", ...};
+
 new Handle:db = INVALID_HANDLE;
 
 new Float:g_fFreezeOrigin[MAXPLAYERS+1][3];
@@ -97,6 +99,9 @@ public OnMapStart()
 
 public OnClientPutInServer(client)
 {
+	decl String:id[64];
+	g_sClientIDS[client] = GetClientAuthString(client, id, 64);
+	
 	g_bJuggernaut[client] = false;
 	g_iClientCount++;
 	
@@ -128,11 +133,18 @@ public OnClientDisconnect(client)
 		g_bJuggernaut[client] = false;
 		g_bJuggernautExists = false;
 	}
-	decl String:error[512];
+	
 	SQL_TConnect(GetDatabase);
 	
 	decl String:query[512];
-	Format(query, sizeof(query), " %d",)
+	Format(query, sizeof(query),"INSERT INTO usersrecord (userID, gamesPlayed, Freezes, MedicKills, KillsAsJugger, JuggerKills) VALUES ('%s',0,0,0,%d,%d) ON DUPLICATE KEY UPDATE gamesPlayed = gamesPlayed + 0, Freezes = Freezes + 0, MedicKills = MedicKills + 0, KillsAsJugger = KillsAsJugger + %d, JuggerKills = JuggerKills + %d;",
+								g_sClientIDS[client],
+								g_iJuggernautKills[client],
+								g_iJuggernautsKilled[client],
+								g_iJuggernautKills[client],
+								g_iJuggernautsKilled[client]);
+								
+								
 	SQL_TQuery(db, UpdateDatabase, query, client);
 	
 	g_iJuggernautKills[client] = 0;
