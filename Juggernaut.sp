@@ -29,9 +29,16 @@
 #define cGreen					0x04
 #define cDarkGreen  			0x05
 
+//Database Handle
+new Handle:db = INVALID_HANDLE;
 
 //Keeps track of who is the Juggernaut
 new bool:g_bJuggernaut[MAXPLAYERS+1] = { false, ... };
+
+//First dimension is Juggernauts killed, second is kills as Juggernaut
+new g_iJuggernautsKilled[MAXPLAYERS+1] = { 0, ... };
+new g_iJuggernautKills[MAXPLAYERS+1] = { 0, ... };
+new String:g_sPlayerIDS[MAXPLAYERS+1];
 
 //Do we have a Juggernaut yet?
 new bool:g_bJuggernautExists = false;
@@ -62,6 +69,24 @@ public OnPluginStart()
 	//HookEvent("player_changeclass", Event_PlayerClass);
 	HookEvent("player_spawn",       Event_PlayerSpawn);
 	HookEvent("player_death",       Event_PlayerDeath);
+	
+	if(db == INVALID_HANDLE)
+	{
+		decl String:error[512];
+		db = SQL_TConnect(GetDatabase);
+	}
+	
+	
+}
+
+public GetDatabase(Handle:owner, Handle:hndl, const String:error[], any:data)
+{
+	if (hndl == INVALID_HANDLE)
+	{
+		LogError("Database failure: %s", error);
+	} else {
+		db = hndl;
+	}
 }
 
 public OnMapStart()
@@ -78,6 +103,14 @@ public OnMapStart()
 public OnClientPutInServer(client)
 {
 	g_bJuggernaut[client] = false;
+	
+	decl String:authid[64];
+	GetClientAuthString(client, authid, 63);
+	g_sPlayerIDS[client] = authid;
+	
+	g_iJuggernautKills[client] = 0;
+	g_iJuggernautsKilled[client] = 0;
+	
 }
 
 public OnClientDisconnect(client)
@@ -93,6 +126,9 @@ public OnClientDisconnect(client)
 		g_bJuggernaut[client] = false;
 		g_bJuggernautExists = false;
 	}
+	
+	g_iJuggernautKills[client] = 0;
+	g_iJuggernautsKilled[client] = 0;
 	
 }
 
@@ -204,6 +240,8 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast)
 	{
 		if (IsClientInGame(killer) && IsPlayerAlive(killer))
 		{
+			g_iJuggernautsKilled[killer]++;
+			
 			g_bJuggernaut[killed] = false;
 			g_bJuggernaut[killer] = true;
 			
@@ -227,6 +265,8 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast)
 	}
 	if(g_bJuggernaut[killer])
 	{
+		g_iJuggernautKills[killer]++;
+		
 		new juggernautHp = GetClientHealth(killer);
 		SetEntProp(killer, Prop_Data, "m_iHealth", juggernautHp + 25);
 		
