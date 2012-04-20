@@ -43,6 +43,8 @@ new Float:g_fFreezeAngle[MAXPLAYERS+1][3];
 new bool:g_bJuggernautExists = false;
 new bool:g_bOnRespawn[MAXPLAYERS + 1];
 
+new g_iClientCount;
+
 //Sounds
 new String:g_sSounds[10][24] = {"", "vo/scout_no03.wav",   "vo/sniper_no04.wav", "vo/soldier_no01.wav",
 																		"vo/demoman_no03.wav", "vo/medic_no03.wav",  "vo/heavy_no02.wav",
@@ -70,6 +72,7 @@ public OnPluginStart()
 	HookEvent("player_spawn",       Event_PlayerSpawn);
 	HookEvent("player_death",       Event_PlayerDeath);
 	HookEvent("player_hurt", 	    Event_PlayerHurt);
+	g_iClientCount = 0;
 }
 
 public OnMapStart()
@@ -90,14 +93,16 @@ public OnMapStart()
 public OnClientPutInServer(client)
 {
 	g_bJuggernaut[client] = false;
+	g_iClientCount++;
 }
 
 public OnClientDisconnect(client)
 {
-	if(g_bJuggernaut[client] && GetClientCount() >= 1)
+	g_iClientCount--;
+	
+	if(g_bJuggernaut[client] && g_iClientCount == 1 )
 	{
-		new numClients = GetClientCount();
-		new randomClient = GetRandomInt(1, numClients);
+		new randomClient = GetRandomInt(1, g_iClientCount);
 		
 		g_bJuggernaut[client] = false;
 		g_bJuggernaut[randomClient] = true;
@@ -110,7 +115,7 @@ public OnClientDisconnect(client)
 		CreateTimer(0.0, SpawnJuggernautTimer, randomClient, TIMER_FLAG_NO_MAPCHANGE); //Respawn the player at the specified time
 			
 	}
-	else
+	else if(g_iClientCount == 0)
 	{
 		g_bJuggernaut[client] = false;
 		g_bJuggernautExists = false;
