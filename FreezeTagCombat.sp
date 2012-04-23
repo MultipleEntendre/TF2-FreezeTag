@@ -31,11 +31,19 @@
 #define cGreen					0x04
 #define cDarkGreen  			0x05
 
-
-
 new g_iClass[MAXPLAYERS + 1];
 //Keeps track of frozen status of all players
 new bool:g_bFrozen[MAXPLAYERS+1] = { false, ... };
+
+new databaseClient = 0;
+
+new g_iMedicKills[MAXPLAYERS+1] = {0, ...};
+new g_iPlayersFrozen[MAXPLAYERS+1] = {0, ...};
+
+new g_sClientIDS[MAXPLAYERS+1][64];
+new g_sClientNames[MAXPLAYERS+1][64];
+
+new Handle:db = INVALID_HANDLE;
 
 //Timers to handle auto unfreeze for each player
 new Handle:g_hUnfreezeTimer[MAXPLAYERS+1] = { INVALID_HANDLE, ... }; 
@@ -73,7 +81,18 @@ public Plugin:myinfo =
 /*	If we're running freeze tag, tell them */
 public OnClientPutInServer(client)
 {
-	DisplayRules(client);
+	DisplayRules(client);	
+		
+	decl String:id[64];
+	decl String:name[64];
+	GetClientAuthString(client, id, 63);
+	GetClientName(client, name, 63);
+	
+	g_sClientIDS[client] = id;
+	g_sClientNames[client] = name;
+	
+	g_iMedicKills[client] = 0;
+	g_iPlayersFrozen[client] = 0;
 }
 
 DisplayRules(client)
@@ -110,6 +129,7 @@ public OnPluginStart()
 	HookEvent("post_inventory_application", Event_BlockWeaponRespawn);
 	HookEvent("player_hurt", Event_PlayerHurt);
 	HookEvent("player_healed", Event_MedicUnfreeze);
+	HookEvent("player_disconnect", Event_ClientDisconnect);
 
 }
 
@@ -437,4 +457,64 @@ public OnClientDisconnect(client)
 {		
 	UnfreezePlayer(client);
 	FT_CheckForWinner();
+}
+
+public Event_ClientDisconnect(Handle:event, const String:name[], bool:dontBroadcast)
+{
+	new client = GetClientOfUserId(GetEventInt(event, "userid"));
+	
+	databaseClient = client;
+	SQL_TConnect(GetDatabase);
+	
+	//decl String:query[512];
+	//Format(query, sizeof(query), "INSERT INTO usersrecord (userID) values ('Bob');");
+	//Format(query, sizeof(query),"INSERT INTO usersrecord (userID, userName, gamesPlayed, Freezes, MedicKills, KillsAsJugger, JuggerKills) VALUES ( 'Joe', 'Henry',0,0,0,3,4);"
+	//ON DUPLICATE KEY UPDATE gamesPlayed = gamesPlayed + 0, Freezes = Freezes + 0, MedicKills = MedicKills + 0, KillsAsJugger = KillsAsJugger + %d, JuggerKills = JuggerKills + %d;",
+								//g_sClientIDS[client],
+								//g_sClientName[client],
+								//g_iJuggernautKills[client],
+								//g_iJuggernautsKilled[client],
+								//g_iJuggernautKills[client],
+								//g_iJuggernautsKilled[client]
+								//);
+								
+	//PrintToServer(query);
+	//SQL_TQuery(db, UpdateDatabase, query, client);
+	
+}
+
+public GetDatabase(Handle:owner, Handle:hndl, const String:error[], any:data)
+{
+	if (hndl == INVALID_HANDLE)
+	{
+		LogError("Database failure: %s", error);
+	} 
+	else 
+	{
+		db = hndl;
+	
+		decl String:query[512];
+		//Format(query, sizeof(query), "INSERT INTO usersrecord (userID) values ('Bob');");
+		Format(query, sizeof(query),"INSERT INTO usersrecord (userID, userName, Freezes, MedicKills, KillsAsJugger, JuggerKills) VALUES ( '%s','%s',%d,%d,0,0) ON DUPLICATE KEY UPDATE Freezes = Freezes + %d, MedicKills = MedicKills + %d, KillsAsJugger = KillsAsJugger + 0, JuggerKills = JuggerKills + 0;",
+								g_sClientIDS[databaseClient],
+								g_sClientNames[databaseClient],
+								g_iPlayersFrozen[databaseClient],
+								g_iMedicKills[databaseClient],
+								g_iPlayersFrozen[databaseClient],
+								g_iMedicKills[databaseClient]
+								);
+								
+		PrintToServer(query);
+		SQL_TQuery(db, UpdateDatabase, query, data);
+	}
+}
+
+public UpdateDatabase(Handle:owner, Handle:hndl, const String:error[], any:data)
+{
+	databaseClient = 0;
+	if (hndl == INVALID_HANDLE)
+	{
+		PrintToServer("Query failed! %s", error);
+	}
+
 }
