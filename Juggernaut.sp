@@ -33,15 +33,18 @@
 
 new TF2GameRulesEntity; //The entity that controls spawn wave times
 
+new databaseClient = 0;
+
 //Keeps track of who is the Juggernaut
 new bool:g_bJuggernaut[MAXPLAYERS+1] = { false, ... };
 
 new g_iJuggernautsKilled[MAXPLAYERS+1];
 new g_iJuggernautKills[MAXPLAYERS+1];
 
-new String:g_sClientIDS[MAXPLAYERS+1] = {"", ...};
-
 new Handle:db = INVALID_HANDLE;
+
+new String:g_sClientIDS[MAXPLAYERS+1][64];
+new String:g_sClientNames[MAXPLAYERS+1][64];
 
 new Float:g_fFreezeOrigin[MAXPLAYERS+1][3];
 new Float:g_fFreezeAngle[MAXPLAYERS+1][3];
@@ -79,7 +82,9 @@ public OnPluginStart()
 	HookEvent("player_spawn",       Event_PlayerSpawn);
 	HookEvent("player_death",       Event_PlayerDeath);
 	HookEvent("player_hurt", 	    Event_PlayerHurt);
+	HookEvent("player_disconnect", Event_ClientDisconnect);
 	g_iClientCount = 0;
+	db = INVALID_HANDLE;
 }
 
 public OnMapStart()
@@ -99,30 +104,46 @@ public OnMapStart()
 
 public OnClientPutInServer(client)
 {
-	decl String:id[64];
-	g_sClientIDS[client] = GetClientAuthString(client, id, 64);
-	
 	g_bJuggernaut[client] = false;
 	g_iClientCount++;
+	
+		
+	decl String:id[64];
+	decl String:name[64];
+	GetClientAuthString(client, id, 63);
+	GetClientName(client, name, 63);
+	
+	g_sClientIDS[client] = id;
+	g_sClientNames[client] = name;
 	
 	g_iJuggernautKills[client] = 0;
 	g_iJuggernautsKilled[client] = 0;
 }
 
-public OnClientDisconnect(client)
+public Event_ClientDisconnect(Handle:event, const String:name[], bool:dontBroadcast)
 {
+	new client = GetClientOfUserId(GetEventInt(event, "userid"));
+	
+	PrintToServer("Client #%d disconnected.", client);
 	g_iClientCount--;
 	
-	if(g_bJuggernaut[client] && g_iClientCount == 1 )
+	if(g_bJuggernaut[client] && g_iClientCount >= 1 )
 	{
-		new randomClient = GetRandomInt(1, g_iClientCount);
+		decl randomClient;
+		for(randomClient = 1; randomClient < MAXPLAYERS; randomClient++)
+		{
+			if((randomClient != client) && IsClientConnected(randomClient) && IsPlayerAlive(randomClient))
+				break;
+		}
+		
+		PrintToServer("Client #%d should be new Juggernaut.", randomClient);
 		
 		g_bJuggernaut[client] = false;
 		g_bJuggernaut[randomClient] = true;
 		
 		
-		GetClientEyePosition(randomClient, g_fFreezeOrigin[client]);
-		GetClientEyeAngles(randomClient, g_fFreezeAngle[client]);
+		GetClientEyePosition(randomClient, g_fFreezeOrigin[randomClient]);
+		GetClientEyeAngles(randomClient, g_fFreezeAngle[randomClient]);
 		
 		SetRespawnTime(); //Have to do this since valve likes to reset the TF_GameRules during rounds and map changes
 		CreateTimer(0.0, SpawnJuggernautTimer, randomClient, TIMER_FLAG_NO_MAPCHANGE); //Respawn the player at the specified time
@@ -134,21 +155,24 @@ public OnClientDisconnect(client)
 		g_bJuggernautExists = false;
 	}
 	
+	databaseClient = client;
 	SQL_TConnect(GetDatabase);
 	
-	decl String:query[512];
-	Format(query, sizeof(query),"INSERT INTO usersrecord (userID, gamesPlayed, Freezes, MedicKills, KillsAsJugger, JuggerKills) VALUES ('%s',0,0,0,%d,%d) ON DUPLICATE KEY UPDATE gamesPlayed = gamesPlayed + 0, Freezes = Freezes + 0, MedicKills = MedicKills + 0, KillsAsJugger = KillsAsJugger + %d, JuggerKills = JuggerKills + %d;",
-								g_sClientIDS[client],
-								g_iJuggernautKills[client],
-								g_iJuggernautsKilled[client],
-								g_iJuggernautKills[client],
-								g_iJuggernautsKilled[client]);
+	//decl String:query[512];
+	//Format(query, sizeof(query), "INSERT INTO usersrecord (userID) values ('Bob');");
+	//Format(query, sizeof(query),"INSERT INTO usersrecord (userID, userName, gamesPlayed, Freezes, MedicKills, KillsAsJugger, JuggerKills) VALUES ( 'Joe', 'Henry',0,0,0,3,4);"
+	//ON DUPLICATE KEY UPDATE gamesPlayed = gamesPlayed + 0, Freezes = Freezes + 0, MedicKills = MedicKills + 0, KillsAsJugger = KillsAsJugger + %d, JuggerKills = JuggerKills + %d;",
+								//g_sClientIDS[client],
+								//g_sClientName[client],
+								//g_iJuggernautKills[client],
+								//g_iJuggernautsKilled[client],
+								//g_iJuggernautKills[client],
+								//g_iJuggernautsKilled[client]
+								//);
 								
-								
-	SQL_TQuery(db, UpdateDatabase, query, client);
+	//PrintToServer(query);
+	//SQL_TQuery(db, UpdateDatabase, query, client);
 	
-	g_iJuggernautKills[client] = 0;
-	g_iJuggernautsKilled[client] = 0;
 }
 
 public GetDatabase(Handle:owner, Handle:hndl, const String:error[], any:data)
@@ -160,14 +184,29 @@ public GetDatabase(Handle:owner, Handle:hndl, const String:error[], any:data)
 	else 
 	{
 		db = hndl;
+	
+		decl String:query[512];
+		//Format(query, sizeof(query), "INSERT INTO usersrecord (userID) values ('Bob');");
+		Format(query, sizeof(query),"INSERT INTO usersrecord (userID, userName, Freezes, MedicKills, KillsAsJugger, JuggerKills) VALUES ( '%s','%s',0,0,%d,%d) ON DUPLICATE KEY UPDATE Freezes = Freezes + 0, MedicKills = MedicKills + 0, KillsAsJugger = KillsAsJugger + %d, JuggerKills = JuggerKills + %d;",
+								g_sClientIDS[databaseClient],
+								g_sClientNames[databaseClient],
+								g_iJuggernautKills[databaseClient],
+								g_iJuggernautsKilled[databaseClient],
+								g_iJuggernautKills[databaseClient],
+								g_iJuggernautsKilled[databaseClient]
+								);
+								
+		PrintToServer(query);
+		SQL_TQuery(db, UpdateDatabase, query, data);
 	}
 }
 
 public UpdateDatabase(Handle:owner, Handle:hndl, const String:error[], any:data)
 {
+	databaseClient = 0;
 	if (hndl == INVALID_HANDLE)
 	{
-		LogError("Query failed! %s", error);
+		PrintToServer("Query failed! %s", error);
 	}
 
 }
@@ -176,10 +215,11 @@ public Event_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast)
 {
 	new iClient = GetClientOfUserId(GetEventInt(event, "userid"));
 	new attacker = GetClientOfUserId(GetEventInt(event, "attacker"));
-	
-	GetClientEyePosition(attacker, g_fFreezeOrigin[attacker]);
-	GetClientEyeAngles(attacker, g_fFreezeAngle[attacker]);
-	
+	if(attacker != 0) 
+	{
+		GetClientEyePosition(attacker, g_fFreezeOrigin[attacker]);
+		GetClientEyeAngles(attacker, g_fFreezeAngle[attacker]);
+	}
 	if(g_bJuggernaut[iClient])
 		g_bOnRespawn[iClient] = false;
 }
@@ -238,8 +278,8 @@ public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast)
 			ChangeClientTeam(iClient, TF_TEAM_RED);
 		}
 		TF2_SetPlayerClass(iClient, TFClass_Soldier);
-		TF2_AddCondition(iClient, TFCond_Buffed, 60.0);
 		TF2_RegeneratePlayer(iClient);
+		TF2_AddCondition(iClient, TFCond_Buffed, 60.0);
 	}
 	else
 	{
@@ -300,6 +340,7 @@ public Action:Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
 	{
 		if (IsClientInGame(killer) && IsPlayerAlive(killer))
 		{
+			g_iJuggernautsKilled[killer]++;
 			g_bJuggernaut[killed] = false;
 			g_bJuggernaut[killer] = true;
 			
@@ -322,12 +363,14 @@ public Action:Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
 	if(g_bJuggernaut[killer])
 	{
 		new juggernautHp = GetClientHealth(killer);
-		SetEntProp(killer, Prop_Data, "m_iHealth", juggernautHp + 25);
+		new numScouts = GetTeamClientCount(TF_TEAM_BLU);
+		
+		SetEntProp(killer, Prop_Data, "m_iHealth", juggernautHp + (10 * numScouts));
 		
 		SetRespawnTime(); //Have to do this since valve likes to reset the TF_GameRules during rounds and map changes
 		CreateTimer(0.0, SpawnPlayerTimer, killed, TIMER_FLAG_NO_MAPCHANGE); //Respawn the player at the specified time
 			
-			
+		g_iJuggernautKills[killer]++;	
 		//Rebuff the juggernaut
 		TF2_AddCondition(killer, TFCond_Buffed, 60.0);
 	}
@@ -341,12 +384,12 @@ public Action:SpawnJuggernautTimer(Handle:timer, any:client)
      //Respawn the player if he is in game and is dead.
      if(IsClientConnected(client) && IsClientInGame(client))
      {
-		  g_bOnRespawn[client] = true;
-          new PlayerTeam = GetClientTeam(client);
-          if( (PlayerTeam == TF_TEAM_BLU) || (PlayerTeam == TF_TEAM_RED) )
-          {	
-		  	TF2_RespawnPlayer(client);
-          }
+		g_bOnRespawn[client] = true;
+        new PlayerTeam = GetClientTeam(client);
+        if( (PlayerTeam == TF_TEAM_BLU) || (PlayerTeam == TF_TEAM_RED) )
+        {	
+			TF2_RespawnPlayer(client);
+        }
      }
      return Plugin_Continue;
 } 
