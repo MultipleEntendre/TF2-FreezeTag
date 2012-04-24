@@ -130,7 +130,17 @@ public OnPluginStart()
 	HookEvent("player_hurt", Event_PlayerHurt);
 	HookEvent("player_healed", Event_MedicUnfreeze);
 	HookEvent("player_disconnect", Event_ClientDisconnect);
+	HookEvent("player_death", Event_PlayerDeath);
 
+}
+
+public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast)
+{
+	new killer = GetClientOfUserId(GetEventInt(event, "attacker");
+	new victim = GetClientOfUserId(GetEventInt(event, "userid");
+	
+	if(TF2_GetPlayerClass(victim) == TF_CLASS_MEDIC && TF2_GetPlayerClass(killer) == TF_CLASS_SCOUT)
+		g_iMedicKills[killer]++;
 }
 
 public Event_MedicUnfreeze(Handle:event, const String:name[], bool:dontBroadcast)
@@ -172,7 +182,10 @@ public Event_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast)
 		return Plugin_Continue;
 	}
 	if(TF2_GetPlayerClass(victim) == TF_CLASS_SCOUT && (TF2_GetPlayerClass(attacker) == TF_CLASS_MEDIC || TF2_GetPlayerClass(attacker) == TF_CLASS_SCOUT))
+	{
+		g_iPlayersFrozen[attacker]++;
 		FreezePlayer(victim);
+	}
 	
 	return Plugin_Continue;
 }
